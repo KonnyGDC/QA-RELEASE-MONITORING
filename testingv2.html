@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Release Monitoring</title>
+  <!-- Chart.js & DataLabels Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <!-- SheetJS Library for XLSX Generation & Parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1.5rem;
+    }
+    .header {
+      background: var(--card);
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .header-top h2 { margin: 0; }
+    .action-btn-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .btn {
+      padding: 0.45rem 0.85rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .btn-primary { background-color: var(--primary); color: #fff; }
+    .btn-primary:hover { background-color: var(--primary-hover); }
+    .btn-secondary { background-color: #059669; color: #fff; }
+    .btn-secondary:hover { background-color: #047857; }
+    .btn-neutral { background-color: #475569; color: #fff; }
+    .btn-neutral:hover { background-color: #334155; }
+    .btn-import { background-color: #0284c7; color: #fff; }
+    .btn-import:hover { background-color: #0369a1; }
+    .btn-reset { background-color: #94a3b8; color: #fff; }
+    .btn-reset:hover { background-color: #64748b; }
+    .btn-danger { background-color: #dc2626; color: #fff; }
+    .btn-danger:hover { background-color: #b91c1c; }
+
+    .filters { 
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 0.75rem 1.25rem; 
+      align-items: center; 
+      background: #f1f5f9; 
+      padding: 0.75rem 1rem; 
+      border-radius: 6px; 
+    }
+    .filter-group { display: flex; align-items: center; gap: 0.5rem; }
+    label { font-size: 0.85rem; font-weight: 600; color: #475569; }
+    select, input[type="date"], input[type="text"] {
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.85rem;
+      background-color: #fff;
+    }
+    
+    .dashboard-top {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+    .kpi-card {
+      background: var(--card);
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .kpi-card h4 { margin: 0 0 0.5rem 0; color: #64748b; font-size: 0.8rem; text-transform: uppercase; }
+    .kpi-card .val { font-size: 1.7rem; font-weight: bold; }
+    .kpi-card .sub { font-size: 0.85rem; font-weight: 600; color: #64748b; margin-top: 0.2rem; }
+    .chart-card {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .table-container {
+      background: var(--card);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      position: relative;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }
+    th, td { padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { 
+      background: #f1f5f9; 
+      font-weight: 600; 
+      color: #475569; 
+      cursor: pointer;
+      user-select: none;
+    }
+    th:hover { background: #e2e8f0; }
+    .th-sort-icon { margin-left: 0.3rem; opacity: 0.5; font-size: 0.75rem; }
+    .title-col { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+    
+    .status-tag {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: inline-block;
+    }
+    .tag-released { background-color: #bbf7d0; color: #14532d; }
+    .tag-for-release { background-color: #fef08a; color: #713f12; }
+    .tag-not-in-release { background-color: #fca5a5; color: #7f1d1d; }
+
+    /* Action Dropdown Menu */
+    .action-cell { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .menu-btn {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      color: #64748b;
+      padding: 0 0.4rem;
+      border-radius: 4px;
+    }
+    .menu-btn:hover { background-color: #e2e8f0; color: #0f172a; }
+    
+    .dropdown-menu {
+      position: absolute;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border-radius: 6px;
+      display: none;
+      flex-direction: column;
+      z-index: 500;
+      min-width: 110px;
+    }
+    .dropdown-menu button {
+      background: none;
+      border: none;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: var(--text);
+    }
+    .dropdown-menu button:hover { background-color: #f1f5f9; }
+    .dropdown-menu button.danger:hover { background-color: #fee2e2; color: #dc2626; }
+
+    /* Modal Backdrop and Box */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal {
+      background: #ffffff;
+      width: 100%;
+      max-width: 500px;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+    }
+    .modal h3 { margin-top: 0; }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      margin-bottom: 1rem;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+    .import-box {
+      border: 2px dashed #cbd5e1;
+      padding: 1.25rem;
+      border-radius: 8px;
+      background: #f8fafc;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    input:disabled, select:disabled {
+      background-color: #f1f5f9;
+      cursor: not-allowed;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-top">
+      <h2>QA Release Monitoring</h2>
+      <div class="action-btn-group">
+        <button class="btn btn-primary" onclick="openCreateModal()">＋ Add Ticket</button>
+        <button class="btn btn-secondary" onclick="openModal('sprintModal')">＋ New Sprint</button>
+        <button class="btn btn-neutral" onclick="openModal('memberModal')">＋ New Dev / QA</button>
+        <button class="btn btn-import" onclick="openModal('importModal')">📥 Import Data</button>
+        <button class="btn btn-reset" onclick="resetFilters()">Reset Filters</button>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filters">
+      <div class="filter-group">
+        <label for="titleFilter">Search Title:</label>
+        <input type="text" id="titleFilter" placeholder="Filter by Title..." oninput="renderApp()">
+      </div>
+
+      <div class="filter-group">
+        <label for="dateFrom">Date From:</label>
+        <input type="date" id="dateFrom" onchange="renderApp()">
+      </div>
+
+      <div class="filter-group">
+        <label for="dateTo">Date To:</label>
+        <input type="date" id="dateTo" onchange="renderApp()">
+      </div>
+
+      <div class="filter-group">
+        <label for="sprintFilter">Sprint:</label>
+        <select id="sprintFilter" onchange="renderApp()">
+          <option value="all">All Sprints</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="typeFilter">Change Stage:</label>
+        <select id="typeFilter" onchange="renderApp()">
+          <option value="all">All Types</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="typeFilter">Change Status:</label>
+        <select id="typeFilter" onchange="renderApp()">
+          <option value="all">All Types</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="statusFilter">Release Status:</label>
+        <select id="statusFilter" onchange="renderApp()">
+          <option value="all">All Statuses</option>
+          <option value="Released">Released</option>
+          <option value="For release">For release</option>
+          <option value="Not in release">Not in release</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-top">
+    <!-- Summary KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <h4>Total Tickets</h4>
+        <div class="val" id="kpiTotal">0</div>
+        <div class="sub">100% of Filtered</div>
+      </div>
+      <div class="kpi-card">
+        <h4>Released</h4>
+        <div class="val" style="color: #16a34a;" id="kpiReleased">0</div>
+        <div class="sub" id="subReleased">0%</div>
+      </div>
+      <div class="kpi-card">
+        <h4>For Release</h4>
+        <div class="val" style="color: #ca8a04;" id="kpiForRelease">0</div>
+        <div class="sub" id="subForRelease">0%</div>
+      </div>
+      <div class="kpi-card">
+        <h4>Not In Release</h4>
+        <div class="val" style="color: #dc2626;" id="kpiNotInRelease">0</div>
+        <div class="sub" id="subNotInRelease">0%</div>
+      </div>
+    </div>
+
+    <!-- Pie Chart -->
+    <div class="chart-card">
+      <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: #64748b;">Count & % of Release Status</h4>
+      <div style="width: 250px; height: 250px;">
+        <canvas id="statusChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Data Table -->
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortTable('Sprint')">Sprint <span class="th-sort-icon" id="sort-Sprint">↕</span></th>
+          <th onclick="sortTable('Change ID')">Change ID <span class="th-sort-icon" id="sort-Change ID">↕</span></th>
+          <th onclick="sortTable('Title')">Title <span class="th-sort-icon" id="sort-Title">↕</span></th>
+          <th onclick="sortTable('Change Owner')">Developer (Owner) <span class="th-sort-icon" id="sort-Change Owner">↕</span></th>
+          <th onclick="sortTable('Assigned QA')">Assigned QA <span class="th-sort-icon" id="sort-Assigned QA">↕</span></th>
+          <th onclick="sortTable('Change Stage')">Change Stage <span class="th-sort-icon" id="sort-Change Stage">↕</span></th>
+          <th onclick="sortTable('Change Status')">Change Status <span class="th-sort-icon" id="sort-Change Status">↕</span></th>
+          <th onclick="sortTable('Change Type')">Change Type <span class="th-sort-icon" id="sort-Change Type">↕</span></th>
+          <th onclick="sortTable('Created Time')">Created Time <span class="th-sort-icon" id="sort-Created Time">↕</span></th>
+          <th onclick="sortTable('Release Status')">Release Status <span class="th-sort-icon" id="sort-Release Status">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr><td colspan="10">Loading Sprint data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Floating Context Menu -->
+  <div class="dropdown-menu" id="actionMenu">
+    <button onclick="viewCurrentTicket()">👁 View</button>
+    <button onclick="editCurrentTicket()">✏️ Edit</button>
+    <button class="danger" onclick="deleteCurrentTicket()">🗑 Delete</button>
+  </div>
+
+  <!-- MODAL 1: Add / Edit / View Ticket -->
+  <div class="modal-overlay" id="ticketModal">
+    <div class="modal">
+      <h3 id="modalTitle">Add New Ticket Data</h3>
+      <input type="hidden" id="editingIndex" value="-1">
+      <div class="form-group">
+        <label>Sprint Category</label>
+        <select id="newTicketSprint"></select>
+      </div>
+      <div class="form-group">
+        <label>Change ID (e.g., CH-1520)</label>
+        <input type="text" id="newTicketId" placeholder="CH-XXXX">
+      </div>
+      <div class="form-group">
+        <label>Title / Description</label>
+        <input type="text" id="newTicketTitle" placeholder="Describe the change...">
+      </div>
+      <div class="form-group">
+        <label>Developer (Change Owner)</label>
+        <select id="newTicketDev"></select>
+      </div>
+      <div class="form-group">
+        <label>Assigned QA</label>
+        <select id="newTicketQA"></select>
+      </div>
+      <div class="form-group">
+        <label>Change Type</label>
+        <select id="newTicketType">
+          <option value="Emergency">Emergency</option>
+          <option value="Normal">Normal</option>
+          <option value="Standard">Standard</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Release Status</label>
+        <select id="newTicketStatus">
+          <option value="For release">For release</option>
+          <option value="Released">Released</option>
+          <option value="Not in release">Not in release</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-reset" onclick="closeModal('ticketModal')">Cancel</button>
+        <button class="btn btn-primary" id="saveTicketBtn" onclick="submitTicket()">Save Ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Add New Sprint -->
+  <div class="modal-overlay" id="sprintModal">
+    <div class="modal">
+      <h3>Create New Sprint Category</h3>
+      <div class="form-group">
+        <label>Sprint Name (e.g., Sprint 11, Sprint 12)</label>
+        <input type="text" id="newSprintInput" placeholder="Sprint Name">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-reset" onclick="closeModal('sprintModal')">Cancel</button>
+        <button class="btn btn-secondary" onclick="submitSprint()">Add Sprint</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: Add New Dev or QA -->
+  <div class="modal-overlay" id="memberModal">
+    <div class="modal">
+      <h3>Add New Team Member</h3>
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="newMemberName" placeholder="John Doe">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="newMemberRole">
+          <option value="Developer">Developer</option>
+          <option value="QA">QA</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-reset" onclick="closeModal('memberModal')">Cancel</button>
+        <button class="btn btn-neutral" onclick="submitMember()">Add Member</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: Import Excel Template -->
+  <div class="modal-overlay" id="importModal">
+    <div class="modal">
+      <h3>Import Ticket Data</h3>
+      <div class="import-box">
+        <p style="font-size:0.85rem; color:#475569; margin-top:0;">Download the required format template, fill it out, and upload it below.</p>
+        <button class="btn btn-secondary" onclick="downloadXlsxTemplate()">📥 Download XLSX Template</button>
+      </div>
+      <div class="form-group">
+        <label>Select Spreadsheet File (.xlsx or .csv)</label>
+        <input type="file" id="xlsxFileInput" accept=".xlsx, .xls, .csv">
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-reset" onclick="closeModal('importModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="uploadXlsxData()">Upload Data</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  Chart.register(ChartDataLabels);
+
+  const API_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID_HERE/exec";
+
+  const imageSampleData = [
+    { Sprint: "Sprint 10", "Change ID": "CH-1122", Title: "BOS ATTI - Purchasing - Add CATEGORY 2 (AC) on the Approval Apps", "Change Owner": "Earl Rhayan D. Padua", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "04-25-2026 10:20", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1268", Title: "[BUG] BOS BPI - Sales Exporting report per Range - Incorrect alignment of report outputs", "Change Owner": "Vincent C. Baylon", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "06-22-2020 10:38", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1358", Title: "BOS RPI - Purchasing - [RUR] Quantity Received - Did Not Return In PO", "Change Owner": "Andrew C. Baldonado", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "07-09-2020 17:08", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1364", Title: "[BUG] [DPC - Banking] - Incoming Payments - Customer - SI Did not update upon posting or cancellation", "Change Owner": "Nario S. Albos", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "07-15-2020 12:50", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1377", Title: "BOS PLUS / BMOI - AP Invoice Status Remains Closed After Payment Cancellation", "Change Owner": "Nario S. Albos", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "07-16-2020 19:40", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1411", Title: "BOS RPI : RFP Uploading (Payment Only) - Duplicate Profit Center", "Change Owner": "Francis Alfonso Bandelaria", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "07-30-2020 10:50", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1437", Title: "BOS BGFI - CTGI - Collection - No Cost Center Captured in Upload Collection", "Change Owner": "Francis Alfonso Bandelaria", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "08-06-2020 10:35", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1442", Title: "BOS - CTGI / BPI - PURCHASING BOOK REPORT - TO CORRECT EXPORTED REPORT (CTGI/BOS-DIR-20092-PURCHASES BOOK) FOR ACCURATE SUMMARY", "Change Owner": "Cene Vincent A. Soriano", "Assigned QA": "Not Assigned", "Change Stage": "Review", "Change Status": "Leader Code Review", "Change Type": "Emergency", "Created Time": "08-11-2020 10:50", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1443", Title: "[BUG] BOS BPI - Sales - Item Master Uploading - PR Quantity Incorrect", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "UAT", "Change Status": "For UAT", "Change Type": "Emergency", "Created Time": "08-11-2020 18:25", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1447", Title: "[BUG] BLMS FM - Issue In Verification - Truck Return and Re-weigh Verification Module", "Change Owner": "Bryan E. Berza", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Planning", "Change Status": "Pending - For RCA", "Change Type": "Emergency", "Created Time": "08-12-2020 14:37", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1449", Title: "[BUG] BOS - CTGI - Sales Receivable - Create Repeating Upload - WRONG AMOUNT CAPTURED IN THE POSTED AR TRANSACTION due to a truncated number", "Change Owner": "Cene Vincent A. Soriano", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "08-12-2020 17:14", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1463", Title: "231 - BPI / SLMS (DPC) - Distribution - Not Creating Master Data for TR", "Change Owner": "Charm Dominic N. Perez", "Assigned QA": "Mryk Howell D. David", "Change Stage": "UAT", "Change Status": "For UAT", "Change Type": "Emergency", "Created Time": "08-18-2020 10:04", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1470", Title: "BOS [BUG] Sales - CR Copy From Error from SO", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "08-25-2020 10:08", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1471", Title: "BOS BPI: Sales - Invoice - Allow user to edit", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "UAT", "Change Status": "For UAT", "Change Type": "Emergency", "Created Time": "08-25-2020 10:20", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1473", Title: "BOS-BPI [BUG] AP INVOICE - VAT amount goes over to non-taxable PO item", "Change Owner": "Andrew C. Baldonado", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "08-27-2020 09:45", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1480", Title: "BOS-RPI [BUG] ROU - SYSTEM BENCHMARK RATE", "Change Owner": "Earl Rhayan D. Padua", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Open", "Change Type": "Emergency", "Created Time": "09-01-2020 11:18", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1486", Title: "BOS - RPI - PNI Report - Unable to export to excel", "Change Owner": "Earl Rhayan D. Padua", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Open", "Change Type": "Emergency", "Created Time": "09-03-2020 10:00", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1487", Title: "BOS RPI (DPC) - Sales Tracking List Error Unknown Column", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "09-03-2020 10:04", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1488", Title: "BOS RPI (Sales) - Urgent - Wrong Quantity captured in the UM Totaling Print Layout", "Change Owner": "Francis Alfonso Bandelaria", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "09-03-2020 11:28", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1490", Title: "BOS RPI (Sales) ROU - Printing error on DR - Can not print", "Change Owner": "Andrew C. Baldonado", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "09-04-2020 18:25", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1497", Title: "BOS (BUG) - Multiple document issue for Cancelled GPO", "Change Owner": "Andrew C. Baldonado", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "09-07-2020 14:14", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1511", Title: "[BUG] BOS BPI - PG Feeding Stock Transfer Confirmation - Change status", "Change Owner": "Earl Rhayan D. Padua", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "09-08-2020 10:14", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1011", Title: "[WMS] Live (LIVE) - Express Delivery SO Uploading", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "09-08-2020 18:00", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-584", Title: "(ENHANCEMENT) - BOS CTGI - Business Center (BC) Disbursement Fund Processing", "Change Owner": "John Kylle Eries A. Carreon", "Assigned QA": "Not Assigned", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "02-18-2020 11:11", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-540", Title: "(ENHANCEMENT) - BOS CTGI - Business Center (BC) Disbursement Fund Processing", "Change Owner": "Bryan E. Berza", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "02-28-2020 16:30", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-848", Title: "WMS Planning Serving Report: Enhance the Existing Filter of the Report", "Change Owner": "Bryan E. Berza", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "03-04-2020 11:11", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-896", Title: "WMS: ENDING INVENTORY [Intransit Report] - Request for Customer Name Filter in the Summary", "Change Owner": "Karl Ghian C. Mercado", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "03-23-2020 14:01", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-910", Title: "EBT BSFI : Document Tracer - RFP Monitoring Report Enhancement", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "03-25-2020 14:08", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-947", Title: "CTGI - RFP Report (both surface & central system)", "Change Owner": "Rona Jean B. Castro", "Assigned QA": "Not Assigned", "Change Stage": "UAT", "Change Status": "For UAT", "Change Type": "Normal", "Created Time": "03-04-2020 14:50", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-950", Title: "[WMS] Warehouse - Truck Monitoring: Outbound Logistics Queuing System", "Change Owner": "Jameson T. Carigao", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "03-06-2020 15:24", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1139", Title: "WMS: Production Report - Unscan for Freezing Summary Report", "Change Owner": "Karl Ghian C. Mercado", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "04-27-2020 15:01", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1282", Title: "BOS DPLUG - Sales - Include Intercompany Sales into TR reports", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Implementation", "Change Status": "Dev Rework", "Change Type": "Normal", "Created Time": "06-28-2020 13:01", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1353", Title: "WMS SERVING REPORT PDO: Sort per Distribution Channel (Serving Report)", "Change Owner": "Bryan E. Berza", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "07-08-2020 08:30", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1383", Title: "BOS [BUG] WMS WRU - Process Request Quantity with 2 LMS TR with 1 WMS SO", "Change Owner": "Charm Dominic N. Perez", "Assigned QA": "Not Assigned", "Change Stage": "Implementation", "Change Status": "Development In Progress", "Change Type": "Normal", "Created Time": "07-28-2020 11:21", "Release Status": "Not in release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1435", Title: "WMS - Sales Materials Uploading", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Normal", "Created Time": "08-07-2020 14:05", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1438", Title: "[WMS] REPORTS - Logistics Report : Live Trucker Billing - Automation of Live Hauling Billing (generation)", "Change Owner": "John Ernie E. Angeles", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "08-10-2020 14:11", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1451", Title: "BSFI EBT: Sales - Add Delivery Confirmation Function", "Change Owner": "Ayn Mathew A. Astrera", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "08-10-2020 10:50", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1461", Title: "[SBX] WMS: Customer - Automate Branch Selection of Customer Master Mass Upload", "Change Owner": "John Kylle Eries A. Carreon", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "08-18-2020 08:30", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1466", Title: "WMS : SSRS : Report : Delivery Report Additional Column", "Change Owner": "Ric M. Gregorio", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "08-19-2020 17:00", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1479", Title: "[WMS] Live : Live Trucker Rate Uploading", "Change Owner": "John Ernie E. Angeles", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "08-28-2020 15:28", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1482", Title: "BOS CTGI - Banking: Update Sorting of Generated TXT/CSV Files by PV Number (in Corporate Check Printing)", "Change Owner": "Rona Jean B. Castro", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "09-02-2020 10:18", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1484", Title: "[WMS]: Warehouse - Truck Monitoring - Add of Comments and Replies in Queuing Management", "Change Owner": "Jameson T. Carigao", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "09-02-2020 11:15", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1485", Title: "[WMS]: DISPATCHING - DP OUTBOUND LOGISTICS QUEUING VIEW ENHANCEMENT IN SUPPORT TO THE EXISTING TICKET (CH-950[WMS] Warehouse - Truck Monitoring: Outbound Logistics Queuing System)", "Change Owner": "Jameson T. Carigao", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Release", "Change Status": "Release Associated", "Change Type": "Normal", "Created Time": "09-03-2020 10:04", "Release Status": "For release" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1510", Title: "BOS - BPI Stock Receipt", "Change Owner": "Rick Rosell O. David", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Normal", "Created Time": "09-10-2020 10:41", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1512", Title: "BOS - STS Stock Confirmation - Require Attachment for Feed Mill Warehouses", "Change Owner": "Rick Rosell O. David", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Normal", "Created Time": "09-10-2020 13:41", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1454", Title: "BOS BPI - Purchasing - PO Prooflist Report- Additional filter & column STATUS", "Change Owner": "Raven B. Bautista", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-14-2020 10:45", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1458", Title: "BOS CTGI - Purchasing - PO Prooflist Report- Additional filter & column STATUS", "Change Owner": "Raven B. Bautista", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-14-2020 10:45", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1460", Title: "BOS BPI - Purchasing - PO Prooflist Report- Additional filter & column STATUS", "Change Owner": "Raven B. Bautista", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-14-2026 10:44", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1462", Title: "BOS CTGI - Purchasing - PO Prooflist Report- Additional filter & column STATUS", "Change Owner": "Raven B. Bautista", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-14-2026 10:45", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1476", Title: "BOS BPI - Purchasing - PO Prooflist Report- Additional filter & column STATUS", "Change Owner": "Raven B. Bautista", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-27-2026 10:08", "Release Status": "Released" },
+    { Sprint: "Sprint 10", "Change ID": "CH-1477", Title: "BOS BPI Financial Report - Add-on REMARKS AND SUPPLIER NAME in VP Summary L.C. - New", "Change Owner": "Rona Jean B. Castro", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-27-2026 10:28", "Release Status": "Released" }
+  ];
+
+
+  let rawData = [...imageSampleData];
+  let customSprints = ["Sprint 10"];
+  let developers = ["Earl Rhayan D. Padua", "Vincent C. Baylon", "Nario S. Albos", "Ayn Mathew A. Astrera", "Bryan E. Berza", "Andrew C. Baldonado"];
+  let qaMembers = ["Mark Anthony A. Udarbe", "Francis Alfonso Bandelaria", "Mryk Howell D. David"];
+  let statusChartInstance = null;
+
+  // Sorting state
+  let currentSortColumn = null;
+  let currentSortAsc = true;
+  let activeMenuIndex = null;
+
+  function parseDate(dateStr) {
+    if (!dateStr) return null;
+    const parts = String(dateStr).split(" ")[0].split("-");
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return new Date(parts[0], parts[1] - 1, parts[2]);
+      return new Date(parts[2], parts[0] - 1, parts[1]);
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  async function fetchDBData() {
+    try {
+      const res = await fetch(API_URL);
+      const db = await res.json();
+      if (db.tickets && db.tickets.length > 0) rawData = db.tickets;
+      if (db.sprints && db.sprints.length > 0) customSprints = db.sprints;
+      if (db.developers && db.developers.length > 0) developers = db.developers;
+      if (db.qaMembers && db.qaMembers.length > 0) qaMembers = db.qaMembers;
+    } catch (err) {
+      console.warn("Using sample dataset (API unavailable):", err);
+    } finally {
+      populateDropdowns();
+      renderApp();
+    }
+  }
+
+  function populateDropdowns() {
+    const typeSelect = document.getElementById("typeFilter");
+    const types = [...new Set(rawData.map(d => d["Change Type"]).filter(Boolean))];
+    typeSelect.innerHTML = `<option value="all">All Types</option>`;
+    types.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t; opt.textContent = t;
+      typeSelect.appendChild(opt);
+    });
+
+    const sprintSelect = document.getElementById("sprintFilter");
+    const modalSprintSelect = document.getElementById("newTicketSprint");
+    const allSprints = [...new Set([...customSprints, ...rawData.map(d => d["Sprint"] || "Sprint 10")])];
+    
+    sprintSelect.innerHTML = `<option value="all">All Sprints</option>`;
+    modalSprintSelect.innerHTML = ``;
+    allSprints.forEach(s => {
+      const opt1 = document.createElement("option");
+      opt1.value = s; opt1.textContent = s;
+      sprintSelect.appendChild(opt1);
+
+      const opt2 = document.createElement("option");
+      opt2.value = s; opt2.textContent = s;
+      modalSprintSelect.appendChild(opt2);
+    });
+
+    const modalDev = document.getElementById("newTicketDev");
+    modalDev.innerHTML = developers.map(d => `<option value="${d}">${d}</option>`).join("");
+
+    const modalQA = document.getElementById("newTicketQA");
+    modalQA.innerHTML = qaMembers.map(q => `<option value="${q}">${q}</option>`).join("");
+  }
+
+  // Header Sorting Implementation
+  function sortTable(columnKey) {
+    if (currentSortColumn === columnKey) {
+      currentSortAsc = !currentSortAsc;
+    } else {
+      currentSortColumn = columnKey;
+      currentSortAsc = true;
+    }
+
+    document.querySelectorAll(".th-sort-icon").forEach(icon => icon.textContent = "↕");
+    const activeIcon = document.getElementById(`sort-${columnKey}`);
+    if (activeIcon) activeIcon.textContent = currentSortAsc ? "↑" : "↓";
+
+    renderApp();
+  }
+
+  function renderApp() {
+    const titleVal = document.getElementById("titleFilter").value.toLowerCase().trim();
+    const typeVal = document.getElementById("typeFilter").value;
+    const sprintVal = document.getElementById("sprintFilter").value;
+    const statusVal = document.getElementById("statusFilter").value;
+    const dateFromVal = document.getElementById("dateFrom").value ? new Date(document.getElementById("dateFrom").value) : null;
+    const dateToVal = document.getElementById("dateTo").value ? new Date(document.getElementById("dateTo").value) : null;
+
+    if (dateToVal) dateToVal.setHours(23, 59, 59, 999);
+
+    let filtered = rawData.filter(d => {
+      const titleMatch = !titleVal || (d["Title"] && d["Title"].toLowerCase().includes(titleVal));
+      const matchType = typeVal === "all" || d["Change Type"] === typeVal;
+      const matchSprint = sprintVal === "all" || (d["Sprint"] || "Sprint 10") === sprintVal;
+      const matchStatus = statusVal === "all" || d["Release Status"] === statusVal;
+
+      const createdDate = parseDate(d["Created Time"]);
+      let matchDate = true;
+      if (createdDate) {
+        if (dateFromVal && createdDate < dateFromVal) matchDate = false;
+        if (dateToVal && createdDate > dateToVal) matchDate = false;
+      }
+
+      return titleMatch && matchType && matchSprint && matchStatus && matchDate;
+    });
+
+    if (currentSortColumn) {
+      filtered.sort((a, b) => {
+        let valA = a[currentSortColumn] || "";
+        let valB = b[currentSortColumn] || "";
+
+        if (currentSortColumn === "Created Time") {
+          valA = parseDate(valA) || 0;
+          valB = parseDate(valB) || 0;
+        } else {
+          valA = valA.toString().toLowerCase();
+          valB = valB.toString().toLowerCase();
+        }
+
+        if (valA < valB) return currentSortAsc ? -1 : 1;
+        if (valA > valB) return currentSortAsc ? 1 : -1;
+        return 0;
+      });
+    }
+
+    const totalCount = filtered.length;
+    const releasedCount = filtered.filter(d => d["Release Status"] === "Released").length;
+    const forReleaseCount = filtered.filter(d => d["Release Status"] === "For release").length;
+    const notInReleaseCount = filtered.filter(d => d["Release Status"] === "Not in release").length;
+
+    const releasedPct = totalCount ? ((releasedCount / totalCount) * 100).toFixed(1) : "0.0";
+    const forReleasePct = totalCount ? ((forReleaseCount / totalCount) * 100).toFixed(1) : "0.0";
+    const notInReleasePct = totalCount ? ((notInReleaseCount / totalCount) * 100).toFixed(1) : "0.0";
+
+    document.getElementById("kpiTotal").textContent = totalCount;
+    document.getElementById("kpiReleased").textContent = releasedCount;
+    document.getElementById("subReleased").textContent = `${releasedPct}%`;
+
+    document.getElementById("kpiForRelease").textContent = forReleaseCount;
+    document.getElementById("subForRelease").textContent = `${forReleasePct}%`;
+
+    document.getElementById("kpiNotInRelease").textContent = notInReleaseCount;
+    document.getElementById("subNotInRelease").textContent = `${notInReleasePct}%`;
+
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#64748b;">No matching tickets found.</td></tr>`;
+    } else {
+      filtered.forEach((row) => {
+        const originalIndex = rawData.indexOf(row);
+        const tr = document.createElement("tr");
+        const releaseStatus = row["Release Status"] || "";
+        let tagClass = "";
+        if (releaseStatus === "Released") tagClass = "tag-released";
+        else if (releaseStatus === "For release") tagClass = "tag-for-release";
+        else if (releaseStatus === "Not in release") tagClass = "tag-not-in-release";
+
+        const devName = row["Developer"] || row["Change Owner"] || "-";
+        const sprintName = row["Sprint"] || "Sprint 10";
+
+        tr.innerHTML = `
+          <td><strong>${sprintName}</strong></td>
+          <td><strong>${row["Change ID"] || ""}</strong></td>
+          <td class="title-col" title="${row["Title"] || ""}">${row["Title"] || ""}</td>
+          <td><strong>${devName}</strong></td>
+          <td>${row["Assigned QA"] || "-"}</td>
+          <td>${row["Change Stage"] || "Development"}</td>
+          <td>${row["Change Status"] || "In Progress"}</td>
+          <td>${row["Change Type"] || "-"}</td>
+          <td>${row["Created Time"] || "-"}</td>
+          <td>
+            <div class="action-cell">
+              <span class="status-tag ${tagClass}">${releaseStatus}</span>
+              <button class="menu-btn" onclick="toggleActionMenu(event, ${originalIndex})">⋮</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    updateChart(releasedCount, forReleaseCount, notInReleaseCount, totalCount);
+  }
+
+  // 3-Dots Menu Logic
+  function toggleActionMenu(event, index) {
+    event.stopPropagation();
+    activeMenuIndex = index;
+    const menu = document.getElementById("actionMenu");
+    
+    const rect = event.target.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + window.scrollY}px`;
+    menu.style.left = `${rect.left - 80 + window.scrollX}px`;
+    menu.style.display = "flex";
+  }
+
+  document.addEventListener("click", () => {
+    document.getElementById("actionMenu").style.display = "none";
+  });
+
+  function openCreateModal() {
+    document.getElementById("editingIndex").value = "-1";
+    document.getElementById("modalTitle").textContent = "Add New Ticket Data";
+    document.getElementById("saveTicketBtn").style.display = "inline-block";
+    setFormDisabled(false);
+    
+    document.getElementById("newTicketId").value = "";
+    document.getElementById("newTicketTitle").value = "";
+    openModal("ticketModal");
+  }
+
+  function viewCurrentTicket() {
+    if (activeMenuIndex === null) return;
+    const ticket = rawData[activeMenuIndex];
+    document.getElementById("editingIndex").value = activeMenuIndex;
+    document.getElementById("modalTitle").textContent = "View Ticket Details";
+    document.getElementById("saveTicketBtn").style.display = "none";
+
+    fillModalFields(ticket);
+    setFormDisabled(true);
+    openModal("ticketModal");
+  }
+
+  function editCurrentTicket() {
+    if (activeMenuIndex === null) return;
+    const ticket = rawData[activeMenuIndex];
+    document.getElementById("editingIndex").value = activeMenuIndex;
+    document.getElementById("modalTitle").textContent = "Edit Ticket Details";
+    document.getElementById("saveTicketBtn").style.display = "inline-block";
+
+    fillModalFields(ticket);
+
+    // If ticket is locked, disable all code fields except status; otherwise, enable form but explicitly keep Change ID disabled.
+    if (ticket.isLocked) {
+      setFormDisabled(false);
+      document.getElementById("newTicketStatus").disabled = false; // Allow status adjustment
+    } else {
+      setFormDisabled(false);
+      // document.getElementById("newTicketId").disabled = true; // Always disable Change ID during edits
+    }
+	document.getElementById("newTicketId").disabled = true;
+
+    openModal("ticketModal");
+  }
+
+  function fillModalFields(ticket) {
+    document.getElementById("newTicketSprint").value = ticket["Sprint"] || customSprints[0];
+    document.getElementById("newTicketId").value = ticket["Change ID"] || "";
+    document.getElementById("newTicketTitle").value = ticket["Title"] || "";
+    document.getElementById("newTicketDev").value = ticket["Change Owner"] || developers[0];
+    document.getElementById("newTicketQA").value = ticket["Assigned QA"] || qaMembers[0];
+    document.getElementById("newTicketType").value = ticket["Change Type"] || "Normal";
+    document.getElementById("newTicketStatus").value = ticket["Release Status"] || "For release";
+  }
+
+  function setFormDisabled(disabled) {
+    document.getElementById("newTicketSprint").disabled = disabled;
+    document.getElementById("newTicketId").disabled = disabled;
+    document.getElementById("newTicketTitle").disabled = disabled;
+    document.getElementById("newTicketDev").disabled = disabled;
+    document.getElementById("newTicketQA").disabled = disabled;
+    document.getElementById("newTicketType").disabled = disabled;
+    document.getElementById("newTicketStatus").disabled = disabled;
+  }
+
+  async function deleteCurrentTicket() {
+    if (activeMenuIndex === null) return;
+    if (confirm("Are you sure you want to delete this ticket?")) {
+      const ticketToDelete = rawData[activeMenuIndex];
+      rawData.splice(activeMenuIndex, 1);
+      renderApp();
+
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "deleteTicket", changeId: ticketToDelete["Change ID"] })
+        });
+      } catch (err) {
+        console.error("Failed to delete ticket in API:", err);
+      }
+    }
+  }
+
+  function updateChart(released, forRelease, notInRelease, total) {
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    if (statusChartInstance) statusChartInstance.destroy();
+
+    statusChartInstance = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Released', 'For release', 'Not in release'],
+        datasets: [{
+          data: [released, forRelease, notInRelease],
+          backgroundColor: ['#86efac', '#fef08a', '#fca5a5'],
+          borderColor: ['#16a34a', '#ca8a04', '#dc2626'],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const value = context.raw || 0;
+                const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+                return ` ${context.label}: ${value} (${percentage}%)`;
+              }
+            }
+          },
+          datalabels: {
+            color: '#1e293b',
+            font: { weight: 'bold', size: 11 },
+            formatter: (value) => {
+              if (value === 0 || !total) return '';
+              const percentage = ((value / total) * 100).toFixed(1);
+              return `${value}\n(${percentage}%)`;
+            },
+            textAlign: 'center'
+          }
+        }
+      }
+    });
+  }
+
+  function openModal(id) { document.getElementById(id).style.display = "flex"; }
+  function closeModal(id) { document.getElementById(id).style.display = "none"; }
+
+  // Excel / XLSX Import & Download Methods
+  function downloadXlsxTemplate() {
+    const templateData = [
+      {
+        "Sprint": "Sprint 11",
+        "Change ID": "CH-9001",
+        "Title": "Sample Title - Add new login feature",
+        "Change Owner": "Earl Rhayan D. Padua",
+        "Assigned QA": "Mark Anthony A. Udarbe",
+        "Change Stage": "UAT",
+        "Change Status": "For UAT",
+        "Change Type": "Normal",
+        "Created Time": "09-18-2026 10:00",
+        "Release Status": "For release"
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Tickets");
+    XLSX.writeFile(workbook, "QA_Tickets_Import_Template.xlsx");
+  }
+
+  function uploadXlsxData() {
+    const fileInput = document.getElementById('xlsxFileInput');
+    if (!fileInput.files || fileInput.files.length === 0) {
+      alert("Please select an Excel file to upload.");
+      return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const importedData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (importedData.length === 0) {
+        alert("No valid data found in the imported file.");
+        return;
+      }
+
+      importedData.forEach(row => {
+        const parsedRow = {
+          Sprint: row["Sprint"] || "Sprint 10",
+          "Change ID": row["Change ID"] || `CH-${Math.floor(1000 + Math.random() * 9000)}`,
+          Title: row["Title"] || "Imported Change Request",
+          "Change Owner": row["Change Owner"] || row["Developer"] || "Unassigned",
+          "Assigned QA": row["Assigned QA"] || "Unassigned",
+          "Change Stage": row["Change Stage"] || "Development",
+          "Change Status": row["Change Status"] || "Active",
+          "Change Type": row["Change Type"] || "Normal",
+          "Created Time": row["Created Time"] || new Date().toLocaleString(),
+          "Release Status": row["Release Status"] || "For release",
+          isLocked: false
+        };
+
+        rawData.unshift(parsedRow);
+
+        fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "addTicket", ticket: parsedRow })
+        }).catch(err => console.error("API POST error:", err));
+      });
+
+      populateDropdowns();
+      renderApp();
+      closeModal("importModal");
+      fileInput.value = "";
+      alert(`Successfully imported ${importedData.length} ticket(s)!`);
+    };
+
+    reader.readAsArrayBuffer(file);
+  }
+
+  async function submitTicket() {
+    const idx = parseInt(document.getElementById("editingIndex").value, 10);
+    const now = new Date();
+    const dateStr = `${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}-${now.getFullYear()} ${now.getHours()}:${now.getMinutes()}`;
+
+    const newRow = {
+      Sprint: document.getElementById("newTicketSprint").value,
+      "Change ID": document.getElementById("newTicketId").value || `CH-${Math.floor(1000 + Math.random() * 9000)}`,
+      Title: document.getElementById("newTicketTitle").value || "New Change Request",
+      "Change Owner": document.getElementById("newTicketDev").value,
+      "Assigned QA": document.getElementById("newTicketQA").value,
+      "Change Stage": "Development",
+      "Change Status": "Active",
+      "Change Type": document.getElementById("newTicketType").value,
+      "Created Time": idx >= 0 ? rawData[idx]["Created Time"] : dateStr,
+      "Release Status": document.getElementById("newTicketStatus").value,
+      isLocked: true // Lock code edits on future updates
+    };
+
+    if (idx >= 0) {
+      rawData[idx] = newRow;
+    } else {
+      rawData.unshift(newRow);
+    }
+
+    populateDropdowns();
+    renderApp();
+    closeModal("ticketModal");
+
+    try {
+      await fetch(API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: idx >= 0 ? "updateTicket" : "addTicket", ticket: newRow })
+      });
+    } catch (err) {
+      console.error("Failed to post ticket to API:", err);
+    }
+  }
+
+  async function submitSprint() {
+    const val = document.getElementById("newSprintInput").value.trim();
+    if (val) {
+      customSprints.push(val);
+      populateDropdowns();
+      closeModal("sprintModal");
+      document.getElementById("newSprintInput").value = "";
+
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "addSprint", sprintName: val })
+        });
+      } catch (err) {
+        console.error("Failed to post sprint to API:", err);
+      }
+    }
+  }
+
+  async function submitMember() {
+    const name = document.getElementById("newMemberName").value.trim();
+    const role = document.getElementById("newMemberRole").value;
+    if (name) {
+      if (role === "Developer") developers.push(name);
+      else qaMembers.push(name);
+      populateDropdowns();
+      closeModal("memberModal");
+      document.getElementById("newMemberName").value = "";
+
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "addMember", name: name, role: role })
+        });
+      } catch (err) {
+        console.error("Failed to post member to API:", err);
+      }
+    }
+  }
+
+  function resetFilters() {
+    document.getElementById("titleFilter").value = "";
+    document.getElementById("dateFrom").value = "";
+    document.getElementById("dateTo").value = "";
+    document.getElementById("sprintFilter").value = "all";
+    document.getElementById("typeFilter").value = "all";
+    document.getElementById("statusFilter").value = "all";
+    currentSortColumn = null;
+    currentSortAsc = true;
+    document.querySelectorAll(".th-sort-icon").forEach(icon => icon.textContent = "↕");
+    renderApp();
+  }
+
+  fetchDBData();
+</script>
+
+</body>
+</html>
