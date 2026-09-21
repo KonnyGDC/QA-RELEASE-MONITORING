@@ -54,18 +54,22 @@
       align-items: center;
       gap: 0.3rem;
     }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     .btn-primary { background-color: var(--primary); color: #fff; }
-    .btn-primary:hover { background-color: var(--primary-hover); }
+    .btn-primary:hover:not(:disabled) { background-color: var(--primary-hover); }
     .btn-secondary { background-color: #059669; color: #fff; }
-    .btn-secondary:hover { background-color: #047857; }
+    .btn-secondary:hover:not(:disabled) { background-color: #047857; }
     .btn-neutral { background-color: #475569; color: #fff; }
-    .btn-neutral:hover { background-color: #334155; }
+    .btn-neutral:hover:not(:disabled) { background-color: #334155; }
     .btn-import { background-color: #0284c7; color: #fff; }
-    .btn-import:hover { background-color: #0369a1; }
+    .btn-import:hover:not(:disabled) { background-color: #0369a1; }
     .btn-reset { background-color: #94a3b8; color: #fff; }
-    .btn-reset:hover { background-color: #64748b; }
+    .btn-reset:hover:not(:disabled) { background-color: #64748b; }
     .btn-danger { background-color: #dc2626; color: #fff; }
-    .btn-danger:hover { background-color: #b91c1c; }
+    .btn-danger:hover:not(:disabled) { background-color: #b91c1c; }
 
     .filters { 
       display: flex; 
@@ -117,7 +121,7 @@
     }
     .table-container {
       background: var(--card);
-      border-radius: 8px;
+      border-radius: 8px 8px 0 0;
       border: 1px solid var(--border);
       overflow-x: auto;
       position: relative;
@@ -135,6 +139,24 @@
     .th-sort-icon { margin-left: 0.3rem; opacity: 0.5; font-size: 0.75rem; }
     .title-col { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
     
+    .pagination-footer {
+      background: var(--card);
+      padding: 0.75rem 1.25rem;
+      border-radius: 0 0 8px 8px;
+      border: 1px solid var(--border);
+      border-top: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: #475569;
+    }
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
     .status-tag {
       padding: 0.25rem 0.5rem;
       border-radius: 4px;
@@ -197,6 +219,8 @@
       background: #ffffff;
       width: 100%;
       max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
       border-radius: 8px;
       padding: 1.5rem;
       box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
@@ -221,6 +245,10 @@
       background: #f8fafc;
       text-align: center;
       margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: center;
     }
     input:disabled, select:disabled {
       background-color: #f1f5f9;
@@ -247,43 +275,50 @@
     <div class="filters">
       <div class="filter-group">
         <label for="titleFilter">Search Title:</label>
-        <input type="text" id="titleFilter" placeholder="Filter by Title..." oninput="renderApp()">
+        <input type="text" id="titleFilter" placeholder="Filter by Title..." oninput="onFilterChange()">
       </div>
 
       <div class="filter-group">
         <label for="dateFrom">Date From:</label>
-        <input type="date" id="dateFrom" onchange="renderApp()">
+        <input type="date" id="dateFrom" onchange="onFilterChange()">
       </div>
 
       <div class="filter-group">
         <label for="dateTo">Date To:</label>
-        <input type="date" id="dateTo" onchange="renderApp()">
+        <input type="date" id="dateTo" onchange="onFilterChange()">
       </div>
 
       <div class="filter-group">
         <label for="sprintFilter">Sprint:</label>
-        <select id="sprintFilter" onchange="renderApp()">
+        <select id="sprintFilter" onchange="onFilterChange()">
           <option value="all">All Sprints</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label for="typeFilter">Change Stage:</label>
-        <select id="typeFilter" onchange="renderApp()">
+        <label for="typeFilter">Change Type:</label>
+        <select id="typeFilter" onchange="onFilterChange()">
           <option value="all">All Types</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label for="typeFilter">Change Status:</label>
-        <select id="typeFilter" onchange="renderApp()">
-          <option value="all">All Types</option>
+        <label for="stageFilter">Change Stage:</label>
+        <select id="stageFilter" onchange="onFilterChange()">
+          <option value="all">All Stages</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="changeStatusFilter">Change Status:</label>
+        <select id="changeStatusFilter" onchange="onFilterChange()">
+          <option value="all">All Statuses</option>
         </select>
       </div>
 
       <div class="filter-group">
         <label for="statusFilter">Release Status:</label>
-        <select id="statusFilter" onchange="renderApp()">
+        <select id="statusFilter" onchange="onFilterChange()">
           <option value="all">All Statuses</option>
           <option value="Released">Released</option>
           <option value="For release">For release</option>
@@ -350,6 +385,27 @@
     </table>
   </div>
 
+  <!-- Lower Pagination Controls -->
+  <div class="pagination-footer">
+    <div class="filter-group">
+      <label for="rowsPerPageSelect">Rows per page:</label>
+      <select id="rowsPerPageSelect" onchange="changeRowsPerPage()">
+        <option value="10" selected>10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+    
+    <span id="paginationInfo">Showing 0-0 of 0 items</span>
+
+    <div class="pagination-controls">
+      <button class="btn btn-neutral" id="prevBtn" onclick="prevPage()">Previous</button>
+      <span id="pageNumberDisplay" style="font-weight: 600;">Page 1</span>
+      <button class="btn btn-neutral" id="nextBtn" onclick="nextPage()">Next</button>
+    </div>
+  </div>
+
   <!-- Floating Context Menu -->
   <div class="dropdown-menu" id="actionMenu">
     <button onclick="viewCurrentTicket()">👁 View</button>
@@ -381,6 +437,32 @@
       <div class="form-group">
         <label>Assigned QA</label>
         <select id="newTicketQA"></select>
+      </div>
+      <div class="form-group">
+        <label>Change Stage</label>
+        <select id="newTicketStage">
+          <option value="Planning">Planning</option>
+          <option value="Development">Development</option>
+          <option value="Leader Code Review">Leader Code Review</option>
+          <option value="UAT">UAT</option>
+          <option value="Implementation">Implementation</option>
+          <option value="Release">Release</option>
+          <option value="Close">Close</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Change Status</label>
+        <select id="newTicketChangeStatus">
+          <option value="Active">Active</option>
+          <option value="Pending - For RCA">Pending - For RCA</option>
+          <option value="Development In Progress">Development In Progress</option>
+          <option value="Leader Code Review">Leader Code Review</option>
+          <option value="Dev Rework">Dev Rework</option>
+          <option value="For UAT">For UAT</option>
+          <option value="Release Associated">Release Associated</option>
+          <option value="Open">Open</option>
+          <option value="Completed">Completed</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Change Type</label>
@@ -442,17 +524,21 @@
     </div>
   </div>
 
-  <!-- MODAL 4: Import Excel Template -->
+  <!-- MODAL 4: Import / Export Excel -->
   <div class="modal-overlay" id="importModal">
     <div class="modal">
-      <h3>Import Ticket Data</h3>
+      <h3>Import / Export Ticket Data</h3>
       <div class="import-box">
-        <p style="font-size:0.85rem; color:#475569; margin-top:0;">Download the required format template, fill it out, and upload it below.</p>
-        <button class="btn btn-secondary" onclick="downloadXlsxTemplate()">📥 Download XLSX Template</button>
+        <p style="font-size:0.85rem; color:#475569; margin:0;">Download template or export existing system data:</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+          <button class="btn btn-secondary" onclick="downloadXlsxTemplate()">📥 Download XLSX Template</button>
+          <button class="btn btn-neutral" onclick="exportAllExistingFiles()">📤 Export All Existing Data</button>
+        </div>
       </div>
       <div class="form-group">
-        <label>Select Spreadsheet File (.xlsx or .csv)</label>
+        <label>Select Spreadsheet File (.xlsx, .xls, or .csv)</label>
         <input type="file" id="xlsxFileInput" accept=".xlsx, .xls, .csv">
+        <small style="color:#64748b; font-size: 0.75rem; margin-top: 0.25rem;">Note: If imported tickets contain an existing <b>Change ID</b>, their records will be overwritten.</small>
       </div>
       <div class="modal-actions">
         <button class="btn btn-reset" onclick="closeModal('importModal')">Cancel</button>
@@ -464,7 +550,7 @@
 <script>
   Chart.register(ChartDataLabels);
 
-  const API_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID_HERE/exec";
+  const API_URL = "api.php";
 
   const imageSampleData = [
     { Sprint: "Sprint 10", "Change ID": "CH-1122", Title: "BOS ATTI - Purchasing - Add CATEGORY 2 (AC) on the Approval Apps", "Change Owner": "Earl Rhayan D. Padua", "Assigned QA": "Mark Anthony A. Udarbe", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Emergency", "Created Time": "04-25-2026 10:20", "Release Status": "Not in release" },
@@ -520,7 +606,6 @@
     { Sprint: "Sprint 10", "Change ID": "CH-1477", Title: "BOS BPI Financial Report - Add-on REMARKS AND SUPPLIER NAME in VP Summary L.C. - New", "Change Owner": "Rona Jean B. Castro", "Assigned QA": "Francis Alfonso Bandelaria", "Change Stage": "Close", "Change Status": "Completed", "Change Type": "Standard", "Created Time": "08-27-2026 10:28", "Release Status": "Released" }
   ];
 
-
   let rawData = [...imageSampleData];
   let customSprints = ["Sprint 10"];
   let developers = ["Earl Rhayan D. Padua", "Vincent C. Baylon", "Nario S. Albos", "Ayn Mathew A. Astrera", "Bryan E. Berza", "Andrew C. Baldonado"];
@@ -531,6 +616,10 @@
   let currentSortColumn = null;
   let currentSortAsc = true;
   let activeMenuIndex = null;
+
+  // Pagination state
+  let currentPage = 1;
+  let rowsPerPage = 10;
 
   function parseDate(dateStr) {
     if (!dateStr) return null;
@@ -560,6 +649,7 @@
   }
 
   function populateDropdowns() {
+    // Type Filter
     const typeSelect = document.getElementById("typeFilter");
     const types = [...new Set(rawData.map(d => d["Change Type"]).filter(Boolean))];
     typeSelect.innerHTML = `<option value="all">All Types</option>`;
@@ -569,6 +659,27 @@
       typeSelect.appendChild(opt);
     });
 
+    // Stage Filter
+    const stageSelect = document.getElementById("stageFilter");
+    const stages = [...new Set(rawData.map(d => d["Change Stage"]).filter(Boolean))];
+    stageSelect.innerHTML = `<option value="all">All Stages</option>`;
+    stages.forEach(st => {
+      const opt = document.createElement("option");
+      opt.value = st; opt.textContent = st;
+      stageSelect.appendChild(opt);
+    });
+
+    // Change Status Filter
+    const changeStatusSelect = document.getElementById("changeStatusFilter");
+    const statuses = [...new Set(rawData.map(d => d["Change Status"]).filter(Boolean))];
+    changeStatusSelect.innerHTML = `<option value="all">All Statuses</option>`;
+    statuses.forEach(cs => {
+      const opt = document.createElement("option");
+      opt.value = cs; opt.textContent = cs;
+      changeStatusSelect.appendChild(opt);
+    });
+
+    // Sprint Filter & Modal Select
     const sprintSelect = document.getElementById("sprintFilter");
     const modalSprintSelect = document.getElementById("newTicketSprint");
     const allSprints = [...new Set([...customSprints, ...rawData.map(d => d["Sprint"] || "Sprint 10")])];
@@ -592,6 +703,29 @@
     modalQA.innerHTML = qaMembers.map(q => `<option value="${q}">${q}</option>`).join("");
   }
 
+  function onFilterChange() {
+    currentPage = 1;
+    renderApp();
+  }
+
+  function changeRowsPerPage() {
+    rowsPerPage = parseInt(document.getElementById("rowsPerPageSelect").value, 10);
+    currentPage = 1;
+    renderApp();
+  }
+
+  function prevPage() {
+    if (currentPage > 1) {
+      currentPage--;
+      renderApp();
+    }
+  }
+
+  function nextPage() {
+    currentPage++;
+    renderApp();
+  }
+
   // Header Sorting Implementation
   function sortTable(columnKey) {
     if (currentSortColumn === columnKey) {
@@ -611,6 +745,8 @@
   function renderApp() {
     const titleVal = document.getElementById("titleFilter").value.toLowerCase().trim();
     const typeVal = document.getElementById("typeFilter").value;
+    const stageVal = document.getElementById("stageFilter").value;
+    const changeStatusVal = document.getElementById("changeStatusFilter").value;
     const sprintVal = document.getElementById("sprintFilter").value;
     const statusVal = document.getElementById("statusFilter").value;
     const dateFromVal = document.getElementById("dateFrom").value ? new Date(document.getElementById("dateFrom").value) : null;
@@ -621,6 +757,8 @@
     let filtered = rawData.filter(d => {
       const titleMatch = !titleVal || (d["Title"] && d["Title"].toLowerCase().includes(titleVal));
       const matchType = typeVal === "all" || d["Change Type"] === typeVal;
+      const matchStage = stageVal === "all" || d["Change Stage"] === stageVal;
+      const matchChangeStatus = changeStatusVal === "all" || d["Change Status"] === changeStatusVal;
       const matchSprint = sprintVal === "all" || (d["Sprint"] || "Sprint 10") === sprintVal;
       const matchStatus = statusVal === "all" || d["Release Status"] === statusVal;
 
@@ -631,7 +769,7 @@
         if (dateToVal && createdDate > dateToVal) matchDate = false;
       }
 
-      return titleMatch && matchType && matchSprint && matchStatus && matchDate;
+      return titleMatch && matchType && matchStage && matchChangeStatus && matchSprint && matchStatus && matchDate;
     });
 
     if (currentSortColumn) {
@@ -672,13 +810,29 @@
     document.getElementById("kpiNotInRelease").textContent = notInReleaseCount;
     document.getElementById("subNotInRelease").textContent = `${notInReleasePct}%`;
 
+    // Calculate Pagination Boundaries
+    const totalPages = Math.ceil(totalCount / rowsPerPage) || 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const startIdx = (currentPage - 1) * rowsPerPage;
+    const endIdx = Math.min(startIdx + rowsPerPage, totalCount);
+    const paginatedItems = filtered.slice(startIdx, endIdx);
+
+    // Update Pagination UI Elements
+    document.getElementById("paginationInfo").textContent = totalCount === 0 
+      ? "Showing 0-0 of 0 items" 
+      : `Showing ${startIdx + 1}-${endIdx} of ${totalCount} items`;
+    document.getElementById("pageNumberDisplay").textContent = `Page ${currentPage} of ${totalPages}`;
+    document.getElementById("prevBtn").disabled = currentPage <= 1;
+    document.getElementById("nextBtn").disabled = currentPage >= totalPages;
+
     const tbody = document.getElementById("tableBody");
     tbody.innerHTML = "";
 
-    if (filtered.length === 0) {
+    if (paginatedItems.length === 0) {
       tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#64748b;">No matching tickets found.</td></tr>`;
     } else {
-      filtered.forEach((row) => {
+      paginatedItems.forEach((row) => {
         const originalIndex = rawData.indexOf(row);
         const tr = document.createElement("tr");
         const releaseStatus = row["Release Status"] || "";
@@ -697,7 +851,7 @@
           <td><strong>${devName}</strong></td>
           <td>${row["Assigned QA"] || "-"}</td>
           <td>${row["Change Stage"] || "Development"}</td>
-          <td>${row["Change Status"] || "In Progress"}</td>
+          <td>${row["Change Status"] || "Active"}</td>
           <td>${row["Change Type"] || "-"}</td>
           <td>${row["Created Time"] || "-"}</td>
           <td>
@@ -738,6 +892,8 @@
     
     document.getElementById("newTicketId").value = "";
     document.getElementById("newTicketTitle").value = "";
+    document.getElementById("newTicketStage").value = "Development";
+    document.getElementById("newTicketChangeStatus").value = "Active";
     openModal("ticketModal");
   }
 
@@ -762,15 +918,13 @@
 
     fillModalFields(ticket);
 
-    // If ticket is locked, disable all code fields except status; otherwise, enable form but explicitly keep Change ID disabled.
     if (ticket.isLocked) {
       setFormDisabled(false);
-      document.getElementById("newTicketStatus").disabled = false; // Allow status adjustment
+      document.getElementById("newTicketStatus").disabled = false;
     } else {
       setFormDisabled(false);
-      // document.getElementById("newTicketId").disabled = true; // Always disable Change ID during edits
     }
-	document.getElementById("newTicketId").disabled = true;
+    document.getElementById("newTicketId").disabled = true;
 
     openModal("ticketModal");
   }
@@ -781,6 +935,8 @@
     document.getElementById("newTicketTitle").value = ticket["Title"] || "";
     document.getElementById("newTicketDev").value = ticket["Change Owner"] || developers[0];
     document.getElementById("newTicketQA").value = ticket["Assigned QA"] || qaMembers[0];
+    document.getElementById("newTicketStage").value = ticket["Change Stage"] || "Development";
+    document.getElementById("newTicketChangeStatus").value = ticket["Change Status"] || "Active";
     document.getElementById("newTicketType").value = ticket["Change Type"] || "Normal";
     document.getElementById("newTicketStatus").value = ticket["Release Status"] || "For release";
   }
@@ -791,6 +947,8 @@
     document.getElementById("newTicketTitle").disabled = disabled;
     document.getElementById("newTicketDev").disabled = disabled;
     document.getElementById("newTicketQA").disabled = disabled;
+    document.getElementById("newTicketStage").disabled = disabled;
+    document.getElementById("newTicketChangeStatus").disabled = disabled;
     document.getElementById("newTicketType").disabled = disabled;
     document.getElementById("newTicketStatus").disabled = disabled;
   }
@@ -805,8 +963,8 @@
       try {
         await fetch(API_URL, {
           method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain" },
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "deleteTicket", changeId: ticketToDelete["Change ID"] })
         });
       } catch (err) {
@@ -885,6 +1043,35 @@
     XLSX.writeFile(workbook, "QA_Tickets_Import_Template.xlsx");
   }
 
+  // Export All Existing Data
+  function exportAllExistingFiles() {
+    if (!rawData || rawData.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+
+    const exportArray = rawData.map(item => ({
+      "Sprint": item["Sprint"] || "Sprint 10",
+      "Change ID": item["Change ID"] || "",
+      "Title": item["Title"] || "",
+      "Change Owner": item["Change Owner"] || item["Developer"] || "",
+      "Assigned QA": item["Assigned QA"] || "",
+      "Change Stage": item["Change Stage"] || "",
+      "Change Status": item["Change Status"] || "",
+      "Change Type": item["Change Type"] || "",
+      "Created Time": item["Created Time"] || "",
+      "Release Status": item["Release Status"] || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportArray);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "All_Tickets");
+    
+    const dateStr = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(workbook, `QA_Tickets_Export_${dateStr}.xlsx`);
+  }
+
+  // Upload Excel Data with Rewriting/Overwrite Logic
   function uploadXlsxData() {
     const fileInput = document.getElementById('xlsxFileInput');
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -907,10 +1094,15 @@
         return;
       }
 
+      let updatedCount = 0;
+      let insertedCount = 0;
+
       importedData.forEach(row => {
+        const changeId = row["Change ID"] ? String(row["Change ID"]).trim() : `CH-${Math.floor(1000 + Math.random() * 9000)}`;
+
         const parsedRow = {
           Sprint: row["Sprint"] || "Sprint 10",
-          "Change ID": row["Change ID"] || `CH-${Math.floor(1000 + Math.random() * 9000)}`,
+          "Change ID": changeId,
           Title: row["Title"] || "Imported Change Request",
           "Change Owner": row["Change Owner"] || row["Developer"] || "Unassigned",
           "Assigned QA": row["Assigned QA"] || "Unassigned",
@@ -922,21 +1114,31 @@
           isLocked: false
         };
 
-        rawData.unshift(parsedRow);
+        // Check if ticket already exists by Change ID (Overwrite / Rewrite logic)
+        const existingIndex = rawData.findIndex(item => item["Change ID"] === changeId);
+
+        if (existingIndex !== -1) {
+          rawData[existingIndex] = parsedRow;
+          updatedCount++;
+        } else {
+          rawData.unshift(parsedRow);
+          insertedCount++;
+        }
 
         fetch(API_URL, {
           method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({ action: "addTicket", ticket: parsedRow })
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: existingIndex !== -1 ? "updateTicket" : "addTicket", ticket: parsedRow })
         }).catch(err => console.error("API POST error:", err));
       });
 
       populateDropdowns();
+      currentPage = 1;
       renderApp();
       closeModal("importModal");
       fileInput.value = "";
-      alert(`Successfully imported ${importedData.length} ticket(s)!`);
+      alert(`Import completed!\n- ${updatedCount} ticket(s) updated/overwritten\n- ${insertedCount} new ticket(s) added.`);
     };
 
     reader.readAsArrayBuffer(file);
@@ -953,12 +1155,12 @@
       Title: document.getElementById("newTicketTitle").value || "New Change Request",
       "Change Owner": document.getElementById("newTicketDev").value,
       "Assigned QA": document.getElementById("newTicketQA").value,
-      "Change Stage": "Development",
-      "Change Status": "Active",
+      "Change Stage": document.getElementById("newTicketStage").value,
+      "Change Status": document.getElementById("newTicketChangeStatus").value,
       "Change Type": document.getElementById("newTicketType").value,
       "Created Time": idx >= 0 ? rawData[idx]["Created Time"] : dateStr,
       "Release Status": document.getElementById("newTicketStatus").value,
-      isLocked: true // Lock code edits on future updates
+      isLocked: true
     };
 
     if (idx >= 0) {
@@ -974,8 +1176,8 @@
     try {
       await fetch(API_URL, {
         method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: idx >= 0 ? "updateTicket" : "addTicket", ticket: newRow })
       });
     } catch (err) {
@@ -994,8 +1196,8 @@
       try {
         await fetch(API_URL, {
           method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain" },
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "addSprint", sprintName: val })
         });
       } catch (err) {
@@ -1017,8 +1219,8 @@
       try {
         await fetch(API_URL, {
           method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain" },
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "addMember", name: name, role: role })
         });
       } catch (err) {
@@ -1033,9 +1235,12 @@
     document.getElementById("dateTo").value = "";
     document.getElementById("sprintFilter").value = "all";
     document.getElementById("typeFilter").value = "all";
+    document.getElementById("stageFilter").value = "all";
+    document.getElementById("changeStatusFilter").value = "all";
     document.getElementById("statusFilter").value = "all";
     currentSortColumn = null;
     currentSortAsc = true;
+    currentPage = 1;
     document.querySelectorAll(".th-sort-icon").forEach(icon => icon.textContent = "↕");
     renderApp();
   }
