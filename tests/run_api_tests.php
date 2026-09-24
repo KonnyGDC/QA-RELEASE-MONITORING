@@ -17,6 +17,7 @@ foreach ($argv as $arg) {
 $passed = 0;
 $failed = 0;
 $createdTicketId = null;
+$clonedTicketId = null;
 $testChangeId = 'CH-TEST-' . substr((string) time(), -4);
 $testSprint = 'Test Sprint API ' . substr((string) time(), -4);
 $testDev = 'API Test Dev';
@@ -292,8 +293,8 @@ testCase('12 — GET api/tickets/history.php', function () use ($baseUrl, &$crea
     return in_array('created', $actions, true) && in_array('updated', $actions, true);
 });
 
-testCase('13 — POST api/tickets/transfer_sprint.php', function () use ($baseUrl, &$createdTicketId, $testSprint) {
-    global $createdTicketId;
+testCase('13 — POST transfer_sprint.php (clone)', function () use ($baseUrl, &$createdTicketId, &$clonedTicketId, $testSprint) {
+    global $createdTicketId, $clonedTicketId;
     if (!$createdTicketId) {
         return false;
     }
@@ -307,38 +308,95 @@ testCase('13 — POST api/tickets/transfer_sprint.php', function () use ($baseUr
         'targetSprint' => $targetSprint,
         'transferReason' => 'API test transfer',
     ]);
-    if ($json['success'] !== true) {
+    if ($json['success'] !== true || ($json['data']['mode'] ?? '') !== 'clone') {
         return false;
     }
+    $clonedTicketId = (int) ($json['data']['newTicketId'] ?? 0);
+    if ($clonedTicketId < 1) {
+        return false;
+    }
+
     $data = httpGet("{$baseUrl}/api/data.php");
+    $sourceOk = false;
+    $cloneOk = false;
     foreach ($data['data']['tickets'] ?? [] as $row) {
-        if ((int) ($row['id'] ?? 0) === $createdTicketId) {
-            $remarks = $row['Remarks'] ?? '';
-            return ($row['Sprint'] ?? '') === $targetSprint
+        $tid = (int) ($row['id'] ?? 0);
+        $remarks = $row['Remarks'] ?? '';
+        if ($tid === $createdTicketId) {
+            $sourceOk = ($row['Sprint'] ?? '') === $testSprint
+                && str_contains($remarks, 'Transferred to')
+                && str_contains($remarks, $targetSprint);
+        }
+        if ($tid === $clonedTicketId) {
+            $cloneOk = ($row['Sprint'] ?? '') === $targetSprint
                 && str_contains($remarks, 'Transferred from')
                 && str_contains($remarks, $testSprint);
         }
     }
 
-    return false;
+    return $sourceOk && $cloneOk;
 });
 
-testCase('10 — POST api/tickets/delete.php', function () use ($baseUrl, &$createdTicketId) {
-    global $createdTicketId;
-    if (!$createdTicketId) {
+testCase('14 — POST transfer_sprint.php (return to original)', function () use ($baseUrl, &$clonedTicketId, $testSprint, $testChangeId) {
+    global $clonedTicketId;
+    if (!$clonedTicketId) {
         return false;
     }
-    $json = httpPost("{$baseUrl}/api/tickets/delete.php", ['id' => $createdTicketId]);
-    if ($json['success'] !== true) {
+    $json = httpPost("{$baseUrl}/api/tickets/transfer_sprint.php", [
+        'id' => $clonedTicketId,
+        'targetSprint' => $testSprint,
+        'transferReason' => 'API test return',
+    ]);
+    if ($json['success'] !== true || ($json['data']['mode'] ?? '') !== 'return') {
         return false;
+    }
+
+    $data = httpGet("{$baseUrl}/api/data.php");
+    $inOriginal = 0;
+    foreach ($data['data']['tickets'] ?? [] as $row) {
+        if (($row['Change ID'] ?? '') !== $testChangeId) {
+            continue;
+        }
+        if (($row['Sprint'] ?? '') === $testSprint) {
+            $inOriginal++;
+            if ((int) ($row['id'] ?? 0) === $clonedTicketId) {
+                $remarks = $row['Remarks'] ?? '';
+                if (!str_contains($remarks, 'Returned back to original')) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return $inOriginal === 1;
+});
+
+testCase('10 — POST api/tickets/delete.php', function () use ($baseUrl, &$createdTicketId, &$clonedTicketId, $testChangeId) {
+    global $createdTicketId, $clonedTicketId;
+    $data = httpGet("{$baseUrl}/api/data.php");
+    $ids = [];
+    foreach ($data['data']['tickets'] ?? [] as $row) {
+        if (($row['Change ID'] ?? '') === $testChangeId) {
+            $ids[] = (int) $row['id'];
+        }
+    }
+    if ($ids === []) {
+        return false;
+    }
+    foreach ($ids as $tid) {
+        $json = httpPost("{$baseUrl}/api/tickets/delete.php", ['id' => $tid]);
+        if ($json['success'] !== true) {
+            return false;
+        }
     }
     $data = httpGet("{$baseUrl}/api/data.php");
     foreach ($data['data']['tickets'] ?? [] as $row) {
-        if ((int) ($row['id'] ?? 0) === $createdTicketId) {
+        if (($row['Change ID'] ?? '') === $testChangeId) {
             return false;
         }
     }
     $createdTicketId = null;
+    $clonedTicketId = null;
 
     return true;
 });

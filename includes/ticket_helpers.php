@@ -16,7 +16,7 @@ class TicketNotFoundException extends Exception
 
 function formatTicketForFrontend(array $row): array
 {
-    return [
+    $ticket = [
         'id' => (int) $row['id'],
         'Sprint' => $row['sprint_name'],
         'Change ID' => $row['change_id'],
@@ -30,6 +30,11 @@ function formatTicketForFrontend(array $row): array
         'Release Status' => $row['release_status'],
         'Remarks' => $row['remarks'] ?? '',
     ];
+    if (!empty($row['original_sprint_name'])) {
+        $ticket['Original Sprint'] = $row['original_sprint_name'];
+    }
+
+    return $ticket;
 }
 
 function normalizeRemarksInput($value): ?string
@@ -48,19 +53,52 @@ function normalizeRemarksInput($value): ?string
     return $str;
 }
 
-function appendTransferLogLine(?string $existing, string $fromSprint, string $toSprint, string $userNote): string
+function appendRemarkLine(?string $existing, string $line): string
 {
-    $timestamp = date('m-d-Y G:i');
-    $line = "[{$timestamp}] Transferred from {$fromSprint} to {$toSprint}.";
-    if (trim($userNote) !== '') {
-        $line .= ' Remarks: ' . trim($userNote);
-    }
     $existing = trim((string) ($existing ?? ''));
     if ($existing === '') {
         return $line;
     }
 
     return $existing . "\n" . $line;
+}
+
+function transferRemarkTimestamp(): string
+{
+    return date('m-d-Y G:i');
+}
+
+function appendReturnLogLine(?string $existing, string $originalSprint, string $currentSprint, string $userNote): string
+{
+    $timestamp = transferRemarkTimestamp();
+    $line = "[{$timestamp}] Returned back to original Sprint ({$originalSprint}) from {$currentSprint}.";
+    if (trim($userNote) !== '') {
+        $line .= ' Remarks: ' . trim($userNote);
+    }
+
+    return appendRemarkLine($existing, $line);
+}
+
+function appendTransferOutLogLine(?string $existing, string $targetSprint, string $changeId, string $userNote): string
+{
+    $timestamp = transferRemarkTimestamp();
+    $line = "[{$timestamp}] Transferred to {$targetSprint} (Ticket ID: {$changeId}).";
+    if (trim($userNote) !== '') {
+        $line .= ' Remarks: ' . trim($userNote);
+    }
+
+    return appendRemarkLine($existing, $line);
+}
+
+function appendTransferInLogLine(?string $existing, string $currentSprint, string $changeId, string $userNote): string
+{
+    $timestamp = transferRemarkTimestamp();
+    $line = "[{$timestamp}] Transferred from {$currentSprint} (Original Ticket: {$changeId}).";
+    if (trim($userNote) !== '') {
+        $line .= ' Remarks: ' . trim($userNote);
+    }
+
+    return appendRemarkLine($existing, $line);
 }
 
 function formatCreatedTimeDisplay(string $datetime): string
@@ -102,41 +140,44 @@ function parseCreatedTimeInput(?string $input): string
     return date('Y-m-d H:i:s');
 }
 
-function fetchTickets(PDO $pdo): array
+function ticketSelectSql(): string
 {
-    $sql = 'SELECT q.id, q.change_id, q.title, q.change_stage, q.change_status, q.change_type,
-                   q.created_time, q.remarks, rs.name AS release_status,
+    return 'SELECT q.id, q.change_id, q.title, q.change_stage, q.change_status, q.change_type,
+                   q.created_time, q.remarks, q.new_sprint_id, q.original_sprint_id,
+                   rs.name AS release_status,
                    s.name AS sprint_name,
+                   os.name AS original_sprint_name,
                    mo.name AS owner_name,
                    mq.name AS qa_name
             FROM qa_data q
             INNER JOIN new_sprint s ON s.id = q.new_sprint_id
+            LEFT JOIN new_sprint os ON os.id = q.original_sprint_id
             INNER JOIN release_status rs ON rs.id = q.release_status_id
             INNER JOIN `user` mo ON mo.id = q.owner_user_id
-            LEFT JOIN `user` mq ON mq.id = q.qa_user_id
-            ORDER BY q.id ASC';
+            LEFT JOIN `user` mq ON mq.id = q.qa_user_id';
+}
+
+function fetchTickets(PDO $pdo): array
+{
+    $sql = ticketSelectSql() . ' ORDER BY q.id ASC';
     $stmt = $pdo->query($sql);
     $rows = $stmt->fetchAll();
     return array_map('formatTicketForFrontend', $rows);
 }
 
-function fetchTicketRowById(PDO $pdo, int $id): ?array
+function fetchTicketDbRowById(PDO $pdo, int $id): ?array
 {
-    $sql = 'SELECT q.id, q.change_id, q.title, q.change_stage, q.change_status, q.change_type,
-                   q.created_time, q.remarks, rs.name AS release_status,
-                   s.name AS sprint_name,
-                   mo.name AS owner_name,
-                   mq.name AS qa_name
-            FROM qa_data q
-            INNER JOIN new_sprint s ON s.id = q.new_sprint_id
-            INNER JOIN release_status rs ON rs.id = q.release_status_id
-            INNER JOIN `user` mo ON mo.id = q.owner_user_id
-            LEFT JOIN `user` mq ON mq.id = q.qa_user_id
-            WHERE q.id = ?
-            LIMIT 1';
+    $sql = ticketSelectSql() . ' WHERE q.id = ? LIMIT 1';
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$id]);
     $row = $stmt->fetch();
+
+    return $row ?: null;
+}
+
+function fetchTicketRowById(PDO $pdo, int $id): ?array
+{
+    $row = fetchTicketDbRowById($pdo, $id);
 
     return $row ? formatTicketForFrontend($row) : null;
 }
@@ -338,9 +379,11 @@ function insertTicket(PDO $pdo, array $fields): int
     $qaId = resolveQaMemberId($pdo, $fields['qa']);
     $releaseStatusId = resolveReleaseStatusId($pdo, $fields['releaseStatus']);
 
+    $originalSprintId = $fields['originalSprintId'] ?? null;
+
     $stmt = $pdo->prepare(
-        'INSERT INTO qa_data (new_sprint_id, change_id, title, owner_user_id, qa_user_id, change_stage, change_status, change_type, created_time, release_status_id, remarks)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO qa_data (new_sprint_id, change_id, title, owner_user_id, qa_user_id, change_stage, change_status, change_type, created_time, release_status_id, remarks, original_sprint_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
         $sprintId,
@@ -354,11 +397,27 @@ function insertTicket(PDO $pdo, array $fields): int
         $fields['createdTime'],
         $releaseStatusId,
         $fields['remarks'] ?? null,
+        $originalSprintId,
     ]);
 
     return (int) $pdo->lastInsertId();
 }
 
+function findTicketIdByChangeIdAndSprint(PDO $pdo, string $changeId, string $sprintName): ?int
+{
+    $stmt = $pdo->prepare(
+        'SELECT q.id FROM qa_data q
+         INNER JOIN new_sprint s ON s.id = q.new_sprint_id
+         WHERE q.change_id = ? AND s.name = ?
+         LIMIT 1'
+    );
+    $stmt->execute([trim($changeId), trim($sprintName)]);
+    $row = $stmt->fetch();
+
+    return $row ? (int) $row['id'] : null;
+}
+
+/** @deprecated use findTicketIdByChangeIdAndSprint */
 function findTicketIdByChangeId(PDO $pdo, string $changeId): ?int
 {
     $stmt = $pdo->prepare('SELECT id FROM qa_data WHERE change_id = ? LIMIT 1');
@@ -373,7 +432,12 @@ function findTicketIdByChangeId(PDO $pdo, string $changeId): ?int
  */
 function upsertTicketFromImport(PDO $pdo, array $row): array
 {
-    $existingId = findTicketIdByChangeId($pdo, (string) ($row['Change ID'] ?? $row['change_id'] ?? ''));
+    $changeId = (string) ($row['Change ID'] ?? $row['change_id'] ?? '');
+    $sprintName = trim((string) ($row['Sprint'] ?? $row['sprint'] ?? ''));
+    if ($sprintName === '') {
+        $sprintName = 'Sprint 10';
+    }
+    $existingId = findTicketIdByChangeIdAndSprint($pdo, $changeId, $sprintName);
     if ($existingId !== null) {
         $fields = buildTicketPayload($row, true);
         updateTicketById($pdo, $existingId, $fields);
@@ -421,14 +485,19 @@ function updateTicketById(PDO $pdo, int $id, array $fields): void
     ]);
 }
 
-function transferTicketSprint(PDO $pdo, int $id, string $targetSprintName, string $transferReason): void
+/**
+ * @param array{changeStage?: string, changeStatus?: string, releaseStatus?: string} $modalFields
+ * @return array{mode: 'return'|'clone', sourceId: int, targetId?: int}
+ */
+function transferTicketSprint(PDO $pdo, int $id, string $targetSprintName, string $transferReason, array $modalFields = []): array
 {
-    $before = fetchTicketRowById($pdo, $id);
-    if ($before === null) {
+    $row = fetchTicketDbRowById($pdo, $id);
+    if ($row === null) {
         throw new TicketNotFoundException();
     }
 
-    $currentSprint = $before['Sprint'];
+    $currentSprint = $row['sprint_name'];
+    $changeId = $row['change_id'];
     $targetSprintName = trim($targetSprintName);
     if ($targetSprintName === '') {
         throw new TicketValidationException('Target sprint is required.');
@@ -437,18 +506,93 @@ function transferTicketSprint(PDO $pdo, int $id, string $targetSprintName, strin
         throw new TicketValidationException('Target sprint must be different from current sprint.');
     }
 
-    $newRemarks = appendTransferLogLine($before['Remarks'] ?? '', $currentSprint, $targetSprintName, $transferReason);
-    $sprintId = findOrCreateSprint($pdo, $targetSprintName);
+    $currentSprintId = (int) $row['new_sprint_id'];
+    $originalSprintId = $row['original_sprint_id'] !== null ? (int) $row['original_sprint_id'] : null;
 
-    $stmt = $pdo->prepare('UPDATE qa_data SET new_sprint_id = ?, remarks = ? WHERE id = ?');
-    $stmt->execute([$sprintId, $newRemarks, $id]);
+    if ($originalSprintId === null) {
+        $originalSprintId = $currentSprintId;
+        $stmt = $pdo->prepare('UPDATE qa_data SET original_sprint_id = ? WHERE id = ?');
+        $stmt->execute([$originalSprintId, $id]);
+    }
+
+    $originalSprintName = $row['original_sprint_name'] ?? null;
+    if ($originalSprintName === null || $originalSprintName === '') {
+        $stmt = $pdo->prepare('SELECT name FROM new_sprint WHERE id = ? LIMIT 1');
+        $stmt->execute([$originalSprintId]);
+        $originalSprintName = (string) ($stmt->fetchColumn() ?: $currentSprint);
+    }
+
+    $targetSprintId = findOrCreateSprint($pdo, $targetSprintName);
+    $existingRemarks = $row['remarks'] ?? '';
+
+    $changeStage = trim((string) ($modalFields['changeStage'] ?? ''));
+    if ($changeStage === '') {
+        $changeStage = $row['change_stage'];
+    }
+    $changeStatus = trim((string) ($modalFields['changeStatus'] ?? ''));
+    if ($changeStatus === '') {
+        $changeStatus = $row['change_status'];
+    }
+    $releaseStatusName = trim((string) ($modalFields['releaseStatus'] ?? ''));
+    if ($releaseStatusName === '') {
+        $releaseStatusName = $row['release_status'];
+    }
+    $releaseStatusId = resolveReleaseStatusId($pdo, $releaseStatusName);
+
+    if ($targetSprintName === $originalSprintName) {
+        $stubId = findTicketIdByChangeIdAndSprint($pdo, $changeId, $originalSprintName);
+        if ($stubId !== null && $stubId !== $id) {
+            $stubRow = fetchTicketDbRowById($pdo, $stubId);
+            if ($stubRow !== null) {
+                $existingRemarks = appendRemarkLine($existingRemarks, trim((string) ($stubRow['remarks'] ?? '')));
+            }
+            $del = $pdo->prepare('DELETE FROM qa_data WHERE id = ?');
+            $del->execute([$stubId]);
+        }
+
+        $newRemarks = appendReturnLogLine($existingRemarks, $originalSprintName, $currentSprint, $transferReason);
+        $stmt = $pdo->prepare(
+            'UPDATE qa_data SET new_sprint_id = ?, change_stage = ?, change_status = ?, release_status_id = ?, remarks = ? WHERE id = ?'
+        );
+        $stmt->execute([$originalSprintId, $changeStage, $changeStatus, $releaseStatusId, $newRemarks, $id]);
+
+        return ['mode' => 'return', 'sourceId' => $id];
+    }
+
+    $duplicateId = findTicketIdByChangeIdAndSprint($pdo, $changeId, $targetSprintName);
+    if ($duplicateId !== null) {
+        throw new TicketValidationException('A ticket with this Change ID already exists in the target sprint.');
+    }
+
+    $sourceRemarks = appendTransferOutLogLine($existingRemarks, $targetSprintName, $changeId, $transferReason);
+    $stmt = $pdo->prepare('UPDATE qa_data SET remarks = ? WHERE id = ?');
+    $stmt->execute([$sourceRemarks, $id]);
+
+    $cloneRemarks = appendTransferInLogLine(null, $currentSprint, $changeId, $transferReason);
+    $cloneFields = [
+        'sprint' => $targetSprintName,
+        'changeId' => $changeId,
+        'title' => $row['title'],
+        'owner' => $row['owner_name'],
+        'qa' => $row['qa_name'] ?? '',
+        'changeStage' => $changeStage,
+        'changeStatus' => $changeStatus,
+        'changeType' => $row['change_type'],
+        'createdTime' => date('Y-m-d H:i:s'),
+        'releaseStatus' => $releaseStatusName,
+        'remarks' => $cloneRemarks,
+        'originalSprintId' => $originalSprintId,
+    ];
+    $newId = insertTicket($pdo, $cloneFields);
+
+    return ['mode' => 'clone', 'sourceId' => $id, 'targetId' => $newId];
 }
 
 function handleDbException(PDOException $e): void
 {
     logServerError($e);
     if ((int) $e->errorInfo[1] === 1062) {
-        jsonError('A ticket with this Change ID already exists.');
+        jsonError('A ticket with this Change ID already exists in this sprint.');
     }
     jsonError('Unable to complete the request.', 500, false);
 }

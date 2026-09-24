@@ -40,3 +40,14 @@ ALTER TABLE ticket_history
 
 INSERT INTO schema_migrations (version) VALUES ('2026.03.26.5')
 ON DUPLICATE KEY UPDATE version = schema_migrations.version;
+
+ALTER TABLE qa_data ADD COLUMN IF NOT EXISTS original_sprint_id INT NULL;
+
+ALTER TABLE qa_data DROP INDEX IF EXISTS uk_qa_data_change_id;
+
+ALTER TABLE qa_data ADD UNIQUE KEY IF NOT EXISTS uk_qa_data_change_sprint (change_id, new_sprint_id);
+
+UPDATE qa_data SET original_sprint_id = new_sprint_id WHERE original_sprint_id IS NULL;
+
+INSERT INTO schema_migrations (version) VALUES ('2026.03.26.6')
+ON DUPLICATE KEY UPDATE version = schema_migrations.version;

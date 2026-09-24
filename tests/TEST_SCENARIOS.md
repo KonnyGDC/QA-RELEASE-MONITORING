@@ -66,7 +66,8 @@ Use this checklist in a browser after the database is configured and SQL is impo
 | T5 | **Add/Edit** — **Change Stage** and **Change Status** in modal | Values save and persist after refresh | — |
 | T6 | **Delete** ticket | Row removed; KPIs update | 10 |
 | T7 | **History** (⋮ menu) | Lists create/update/import/delete/transferred actions with timestamps and field changes | 12, 13 |
-| T8 | **Edit** — **Transfer Sprint** to another sprint with note | Sprint updates; remarks append transfer line; History shows Transferred | 13 |
+| T8 | **Edit** — **Transfer Sprint** to another sprint with note | Source row stays in original sprint (remarks: Transferred to…); new row in target (Transferred from…); History: transferred + created on clone | 13 |
+| T8b | **Edit** clone — transfer back to **Original Sprint** | Return alert; one row in original sprint; remarks contain Returned back to original | 14 |
 | T9 | **Remarks / Notes** on save (no transfer) | Text persists after refresh | — |
 
 ## Sprint and members

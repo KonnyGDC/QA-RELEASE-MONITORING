@@ -648,6 +648,9 @@ async function transferTicketSprint() {
     id: parseInt(idVal, 10),
     targetSprint,
     transferReason,
+    changeStage: document.getElementById('newTicketStage').value,
+    changeStatus: document.getElementById('newTicketChangeStatus').value,
+    releaseStatus: document.getElementById('newTicketStatus').value,
   });
 
   if (!result.success) {
@@ -655,15 +658,25 @@ async function transferTicketSprint() {
     return;
   }
 
-  const updated = result.data && result.data.ticket;
-  if (updated) {
-    document.getElementById('newTicketSprint').value = updated.Sprint || targetSprint;
-    document.getElementById('ticketRemarks').value = updated.Remarks || '';
-    fillModalFields(updated);
-  }
+  const data = result.data || {};
+  const mode = data.mode || 'clone';
+  const changeId = ticket['Change ID'] || 'CH-XXXX';
+  const originalSprint =
+    ticket['Original Sprint'] || ticket.Sprint || currentSprint;
 
   await fetchDBData();
-  alert(`Ticket successfully transferred to ${targetSprint}!`);
+  closeModal('ticketModal');
+
+  if (mode === 'return') {
+    alert(
+      `Ticket returned to its original sprint (${originalSprint})! No new ticket was created.`
+    );
+    return;
+  }
+
+  alert(
+    `Ticket successfully transferred! A new ticket record (${changeId}) has been created in ${targetSprint}.`
+  );
 }
 
 function setFormDisabled(disabled) {
@@ -765,6 +778,7 @@ function downloadXlsxTemplate() {
       'Created Time': '09-18-2026 10:00',
       'Release Status': 'For release',
       Remarks: '',
+      'Original Sprint': '',
     },
   ];
 
@@ -793,6 +807,7 @@ function exportAllExistingFiles() {
     'Created Time': item['Created Time'] || '',
     'Release Status': item['Release Status'] || '',
     Remarks: item.Remarks || '',
+    'Original Sprint': item['Original Sprint'] || '',
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(exportArray);
@@ -837,6 +852,7 @@ async function uploadXlsxData() {
       'Created Time': row['Created Time'] || new Date().toLocaleString(),
       'Release Status': row['Release Status'] || 'For release',
       Remarks: row.Remarks || '',
+      'Original Sprint': row['Original Sprint'] || '',
     }));
 
     const result = await apiPost(API.ticketImport, { tickets: parsedRows });

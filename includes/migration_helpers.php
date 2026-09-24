@@ -51,6 +51,28 @@ function migrationEnsureMigrationsTable(PDO $pdo): void
     );
 }
 
+function migrationIndexExists(PDO $pdo, string $table, string $indexName): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM information_schema.statistics
+         WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?'
+    );
+    $stmt->execute([$table, $indexName]);
+
+    return (int) $stmt->fetchColumn() > 0;
+}
+
+function migrationDropIndexIfExists(PDO $pdo, string $table, string $indexName): void
+{
+    if (!migrationIndexExists($pdo, $table, $indexName)) {
+        return;
+    }
+
+    $table = str_replace('`', '``', $table);
+    $indexName = str_replace('`', '``', $indexName);
+    $pdo->exec(sprintf('ALTER TABLE `%s` DROP INDEX `%s`', $table, $indexName));
+}
+
 function migrationRecordSchemaVersion(PDO $pdo, string $version): void
 {
     if (!migrationTableExists($pdo, 'schema_migrations')) {

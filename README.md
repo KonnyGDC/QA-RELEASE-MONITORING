@@ -49,6 +49,8 @@ If the database is not connected, the page shows setup instructions only — **n
 | **`release_status`** | Lookup: `Released`, `For release`, `Not in release` (linked from `qa_data.release_status_id`) |
 | **`ticket_history`** | Audit log per ticket: `created`, `updated`, `deleted`, `imported`, `transferred` (JSON details + timestamp) |
 | **`qa_data.remarks`** | Optional notes and sprint-transfer log lines (TEXT) |
+| **`qa_data.original_sprint_id`** | Home sprint for return-to-original transfer validation |
+| **`qa_data` uniqueness** | Same **Change ID** may exist in different sprints (`UNIQUE(change_id, new_sprint_id)`) after migrate **2026.03.26.6** |
 
 The UI still uses labels like “Change ID” and “Release Status”; only the **MySQL table names** above are used in the schema and PHP.
 

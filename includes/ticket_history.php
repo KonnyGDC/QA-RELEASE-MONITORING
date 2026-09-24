@@ -6,6 +6,7 @@ const TICKET_HISTORY_ACTIONS = ['created', 'updated', 'deleted', 'imported', 'tr
 
 const TICKET_HISTORY_DIFF_FIELDS = [
     'Sprint',
+    'Original Sprint',
     'Change ID',
     'Title',
     'Change Owner',
