@@ -66,6 +66,18 @@ if (is_readable($cssPath)) {
         </select>
       </div>
       <div class="filter-group">
+        <label for="devFilter">Developer:</label>
+        <select id="devFilter" onchange="onFilterChange()">
+          <option value="all">All Developers</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="qaFilter">Assigned QA:</label>
+        <select id="qaFilter" onchange="onFilterChange()">
+          <option value="all">All QA</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label for="typeFilter">Change Type:</label>
         <select id="typeFilter" onchange="onFilterChange()">
           <option value="all">All Types</option>

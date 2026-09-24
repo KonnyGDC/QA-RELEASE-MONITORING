@@ -192,6 +192,24 @@ function populateDropdowns() {
   fillFilterSelect('changeStatusFilter', changeStatuses, 'All Statuses');
   fillFilterSelect('typeFilter', types, 'All Types');
 
+  const devNames = [
+    ...new Set([
+      ...developers,
+      ...rawData.map((d) => d['Change Owner'] || d.Developer).filter(Boolean),
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
+  fillFilterSelect('devFilter', devNames, 'All Developers');
+
+  const qaNames = [
+    ...new Set([
+      ...qaMembers,
+      ...rawData.map((d) => d['Assigned QA']).filter(Boolean),
+    ]),
+  ]
+    .filter((q) => q && q !== 'Not Assigned')
+    .sort((a, b) => a.localeCompare(b));
+  fillFilterSelect('qaFilter', qaNames, 'All QA');
+
   const sprintSelect = document.getElementById('sprintFilter');
   const modalSprintSelect = document.getElementById('newTicketSprint');
   const allSprints = [...new Set([...customSprints, ...rawData.map((d) => d.Sprint || 'Sprint 10')])];
@@ -302,6 +320,8 @@ function renderApp() {
   const changeStatusVal = document.getElementById('changeStatusFilter').value;
   const typeVal = document.getElementById('typeFilter').value;
   const sprintVal = document.getElementById('sprintFilter').value;
+  const devVal = document.getElementById('devFilter')?.value ?? 'all';
+  const qaVal = document.getElementById('qaFilter')?.value ?? 'all';
   const statusVal = document.getElementById('statusFilter').value;
   const dateFromVal = document.getElementById('dateFrom').value
     ? new Date(document.getElementById('dateFrom').value)
@@ -318,6 +338,9 @@ function renderApp() {
     const matchChangeStatus = changeStatusVal === 'all' || d['Change Status'] === changeStatusVal;
     const matchType = typeVal === 'all' || d['Change Type'] === typeVal;
     const matchSprint = sprintVal === 'all' || (d.Sprint || 'Sprint 10') === sprintVal;
+    const ticketDev = d['Change Owner'] || d.Developer || '';
+    const matchDev = devVal === 'all' || ticketDev === devVal;
+    const matchQA = qaVal === 'all' || (d['Assigned QA'] || '') === qaVal;
     const matchStatus = statusVal === 'all' || d['Release Status'] === statusVal;
 
     const createdDate = parseDate(d['Created Time']);
@@ -327,7 +350,17 @@ function renderApp() {
       if (dateToVal && createdDate > dateToVal) matchDate = false;
     }
 
-    return titleMatch && matchStage && matchChangeStatus && matchType && matchSprint && matchStatus && matchDate;
+    return (
+      titleMatch &&
+      matchDev &&
+      matchQA &&
+      matchStage &&
+      matchChangeStatus &&
+      matchType &&
+      matchSprint &&
+      matchStatus &&
+      matchDate
+    );
   });
 
   if (currentSortColumn) {
@@ -961,6 +994,10 @@ function resetFilters() {
   document.getElementById('dateFrom').value = '';
   document.getElementById('dateTo').value = '';
   document.getElementById('sprintFilter').value = 'all';
+  const devFilter = document.getElementById('devFilter');
+  if (devFilter) devFilter.value = 'all';
+  const qaFilter = document.getElementById('qaFilter');
+  if (qaFilter) qaFilter.value = 'all';
   document.getElementById('stageFilter').value = 'all';
   document.getElementById('changeStatusFilter').value = 'all';
   document.getElementById('typeFilter').value = 'all';
